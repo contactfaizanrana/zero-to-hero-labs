@@ -1,4 +1,21 @@
-export default function Home() {
+import { createClient } from '@supabase/supabase-js';
+
+// Force Next.js to fetch fresh database records on every single page load
+export const dynamic = 'force-dynamic';
+
+// Initialize the secure cloud database bridge
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+export default async function Home() {
+  // Query our live table records directly from the AWS cloud infrastructure
+  const { data: logs, error } = await supabase
+    .from('system_logs')
+    .select('*')
+    .order('id', { ascending: true });
+
   return (
     <main className="min-h-screen bg-[#0B0F19] text-slate-100 p-8 font-sans">
       {/* Header Section */}
@@ -19,7 +36,6 @@ export default function Home() {
 
       {/* Grid Layout for Metrics */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        {/* Metric 1 */}
         <div className="bg-[#151B2C] border border-slate-800 rounded-xl p-6 transition-all hover:border-slate-700">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Automation Engine</p>
           <p className="text-3xl font-bold mt-2 font-mono text-blue-400">n8n_Active</p>
@@ -29,7 +45,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Metric 2 */}
         <div className="bg-[#151B2C] border border-slate-800 rounded-xl p-6 transition-all hover:border-slate-700">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Data Stream Metrics</p>
           <p className="text-3xl font-bold mt-2 font-mono text-indigo-400">14.2k <span className="text-lg font-normal text-slate-400">/req</span></p>
@@ -39,7 +54,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Metric 3 */}
         <div className="bg-[#151B2C] border border-slate-800 rounded-xl p-6 transition-all hover:border-slate-700">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Infrastructure Security</p>
           <p className="text-3xl font-bold mt-2 font-mono text-emerald-400">Hardened</p>
@@ -50,17 +64,36 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Console/Logs Section */}
+      {/* Dynamic Console/Logs Section powered by Supabase */}
       <section className="bg-[#0F1422] border border-slate-800 rounded-xl p-6 font-mono">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-blue-400" />
-          System Initialization Logs
+          <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+          Live Cloud Database Logs
         </h2>
         <div className="space-y-2 text-xs text-slate-400 bg-black/30 p-4 rounded-lg border border-slate-900 overflow-x-auto">
-          <p><span className="text-blue-400">[INFO]</span> 2026-07-19 16:57:36 - Bootstrapping Next.js production shell...</p>
-          <p><span className="text-indigo-400">[READY]</span> Loaded TypeScript configuration engine successfully.</p>
-          <p><span className="text-emerald-400">[SUCCESS]</span> Global styles mapped with Tailwind CSS utility modules.</p>
-          <p><span className="text-amber-400">[WARN]</span> Database link pending: Supabase connection layer uninitialized.</p>
+          {error && <p className="text-red-400">[ERROR] Failed to stream telemetry clusters from Supabase backend.</p>}
+          
+          {logs && logs.map((log) => {
+            // Dynamic color assignment matching database log levels
+            let levelColor = "text-blue-400";
+            if (log.level === "READY") levelColor = "text-indigo-400";
+            if (log.level === "SUCCESS") levelColor = "text-emerald-400";
+            if (log.level === "WARN") levelColor = "text-amber-400";
+
+            return (
+              <p key={log.id} className="transition-all duration-300 hover:bg-slate-800/30 py-0.5 px-1 rounded">
+                <span className={levelColor}>[{log.level}]</span>{" "}
+                <span className="text-slate-500">
+                  {new Date(log.created_at).toISOString().replace('T', ' ').substring(0, 19)}
+                </span>{" "}
+                - <span className="text-slate-200">{log.message}</span>
+              </p>
+            );
+          })}
+
+          {logs && logs.length === 0 && (
+            <p className="text-slate-500">[EMPTY] Cloud records compiled but no log entries were found.</p>
+          )}
         </div>
       </section>
     </main>
