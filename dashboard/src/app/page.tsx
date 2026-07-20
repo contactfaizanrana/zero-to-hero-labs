@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
+import { revalidatePath } from 'next/cache';
 
-// Force Next.js to fetch fresh database records on every single page load
 export const dynamic = 'force-dynamic';
 
 // Initialize the secure cloud database bridge
@@ -10,11 +10,30 @@ const supabase = createClient(
 );
 
 export default async function Home() {
-  // Query our live table records directly from the AWS cloud infrastructure
+  // Query live table records (ordered by newest first)
   const { data: logs, error } = await supabase
     .from('system_logs')
     .select('*')
-    .order('id', { ascending: true });
+    .order('id', { ascending: false });
+
+  // Next.js Server Action to safely send your form data straight to Singapore
+  async function injectLog(formData: FormData) {
+    'use server';
+    
+    const message = formData.get('message') as string;
+    const level = formData.get('level') as string;
+    const service = formData.get('service') as string;
+
+    if (!message) return;
+
+    // Insert the new row into the cloud database
+    await supabase.from('system_logs').insert([
+      { level, message, service }
+    ]);
+
+    // Force the page to refresh its server data instantly
+    revalidatePath('/');
+  }
 
   return (
     <main className="min-h-screen bg-[#0B0F19] text-slate-100 p-8 font-sans">
@@ -34,34 +53,47 @@ export default async function Home() {
         </div>
       </header>
 
-      {/* Grid Layout for Metrics */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-[#151B2C] border border-slate-800 rounded-xl p-6 transition-all hover:border-slate-700">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Automation Engine</p>
-          <p className="text-3xl font-bold mt-2 font-mono text-blue-400">n8n_Active</p>
-          <div className="text-xs text-slate-500 mt-2 flex justify-between">
-            <span>Active Workflows: 4</span>
-            <span className="text-emerald-400">100% Success Rate</span>
+      {/* New Feature: Interactive Cloud Data Injector Form */}
+      <section className="bg-[#151B2C] border border-slate-800 rounded-xl p-6 mb-8">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-4 font-mono flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-blue-400" />
+          Execute Cloud Log Injection
+        </h2>
+        <form action={injectLog} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-[10px] uppercase font-mono text-slate-500 mb-1">Log Level</label>
+            <select name="level" className="w-full bg-[#0F1422] border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-slate-300 focus:outline-none focus:border-blue-500">
+              <option value="INFO">INFO</option>
+              <option value="READY">READY</option>
+              <option value="SUCCESS">SUCCESS</option>
+              <option value="WARN">WARN</option>
+            </select>
           </div>
-        </div>
-
-        <div className="bg-[#151B2C] border border-slate-800 rounded-xl p-6 transition-all hover:border-slate-700">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Data Stream Metrics</p>
-          <p className="text-3xl font-bold mt-2 font-mono text-indigo-400">14.2k <span className="text-lg font-normal text-slate-400">/req</span></p>
-          <div className="text-xs text-slate-500 mt-2 flex justify-between">
-            <span>Python Script Node</span>
-            <span className="text-slate-400">Latency: 24ms</span>
+          <div>
+            <label className="block text-[10px] uppercase font-mono text-slate-500 mb-1">Target Node/Service</label>
+            <select name="service" className="w-full bg-[#0F1422] border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-slate-300 focus:outline-none focus:border-blue-500">
+              <option value="Next.js">Next.js</option>
+              <option value="TypeScript">TypeScript</option>
+              <option value="Tailwind">Tailwind</option>
+              <option value="Supabase">Supabase</option>
+            </select>
           </div>
-        </div>
-
-        <div className="bg-[#151B2C] border border-slate-800 rounded-xl p-6 transition-all hover:border-slate-700">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Infrastructure Security</p>
-          <p className="text-3xl font-bold mt-2 font-mono text-emerald-400">Hardened</p>
-          <div className="text-xs text-slate-500 mt-2 flex justify-between">
-            <span>SSL Protocols</span>
-            <span className="text-emerald-400">0 Threat Anomalies</span>
+          <div className="md:col-span-2 flex items-end gap-3">
+            <div className="flex-1">
+              <label className="block text-[10px] uppercase font-mono text-slate-500 mb-1">Telemetry Payload Message</label>
+              <input 
+                required
+                type="text" 
+                name="message" 
+                placeholder="Enter custom telemetry string..." 
+                className="w-full bg-[#0F1422] border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+            <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-mono text-xs font-semibold px-5 py-2 rounded-lg transition-colors h-[34px]">
+              Execute Run
+            </button>
           </div>
-        </div>
+        </form>
       </section>
 
       {/* Dynamic Console/Logs Section powered by Supabase */}
@@ -70,23 +102,23 @@ export default async function Home() {
           <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
           Live Cloud Database Logs
         </h2>
-        <div className="space-y-2 text-xs text-slate-400 bg-black/30 p-4 rounded-lg border border-slate-900 overflow-x-auto">
+        <div className="space-y-2 text-xs text-slate-400 bg-black/30 p-4 rounded-lg border border-slate-900 overflow-x-auto max-h-[300px] overflow-y-auto">
           {error && <p className="text-red-400">[ERROR] Failed to stream telemetry clusters from Supabase backend.</p>}
           
           {logs && logs.map((log) => {
-            // Dynamic color assignment matching database log levels
             let levelColor = "text-blue-400";
             if (log.level === "READY") levelColor = "text-indigo-400";
             if (log.level === "SUCCESS") levelColor = "text-emerald-400";
             if (log.level === "WARN") levelColor = "text-amber-400";
 
             return (
-              <p key={log.id} className="transition-all duration-300 hover:bg-slate-800/30 py-0.5 px-1 rounded">
+              <p key={log.id} className="transition-all duration-300 hover:bg-slate-800/30 py-0.5 px-1 rounded flex gap-2">
                 <span className={levelColor}>[{log.level}]</span>{" "}
                 <span className="text-slate-500">
                   {new Date(log.created_at).toISOString().replace('T', ' ').substring(0, 19)}
                 </span>{" "}
-                - <span className="text-slate-200">{log.message}</span>
+                <span className="text-slate-400">[{log.service}]</span>
+                <span className="text-slate-200">- {log.message}</span>
               </p>
             );
           })}
